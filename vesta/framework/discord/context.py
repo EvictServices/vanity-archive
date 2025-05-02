@@ -2,7 +2,6 @@ import discord
 
 from vesta.framework.tools import Button, View, ConfirmView
 from vesta.framework.pagination import Paginator
-from vesta.shared.clients.settings import Settings
 
 from discord import (
     ButtonStyle,
@@ -14,9 +13,6 @@ from discord import (
     Member,
     Message,
     Attachment,
-    WebhookMessage,
-    Thread,
-    Webhook,
 )
 
 from discord.ext.commands import (
@@ -28,7 +24,7 @@ from discord.ui import button
 from discord.utils import cached_property
 
 from datetime import datetime
-from typing import Optional, Any, Union, cast
+from typing import Optional, Any
 from xxhash import xxh32_hexdigest
 from typing import TYPE_CHECKING, Literal, List
 
@@ -107,7 +103,6 @@ class Context(DefaultContext):
     bot: "Vesta"
     config: "Configuration"
     guild: Guild  # type: ignore
-    settings: Settings
 
     @cached_property
     def replied_message(self) -> Optional[Message]:
@@ -180,11 +175,6 @@ class Context(DefaultContext):
         return await self.send(
             embed=embed, reference=reference, **kwargs
         )
-
-    async def check(self):
-        return await self.message.add_reaction(
-            "👍"
-        )  # not a check but who cares
 
     async def prompt(
         self,

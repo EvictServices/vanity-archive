@@ -26,7 +26,6 @@ from discord.ext.commands import (
 )
 from discord.ext.tasks import loop
 
-from vesta.backend import Backend
 from vesta.framework.discord import (
     Context,
     CommandErrorHandler,
@@ -40,9 +39,7 @@ from vesta.shared.config import (
 )
 from vesta.shared.clients import postgres
 from vesta.shared.clients.postgres import Database
-from vesta.shared.clients.settings import Settings
 from vesta.shared.clients.redis import Redis
-from vesta.shared.clients.minio import MinIO
 
 
 logger = logging.getLogger("vesta/main")
@@ -52,21 +49,13 @@ class Vesta(AutoShardedBot):
     """
     Custom bot class that extends AutoShardedBot.
     """
-
-    backend: Backend
     database: Database
     redis: Redis
-    version: str = "4.0.1"
     session: ClientSession
-    minio: MinIO
 
     def __init__(
         self,
         Configuration: Configuration,
-        port: int,
-        cluster_id: int,
-        shard_ids: List[int] = None,
-        shard_count: int = None,
     ):
         super().__init__(
             command_prefix=self.get_prefix,
@@ -86,14 +75,8 @@ class Vesta(AutoShardedBot):
                 name="🔗 evict.bot",
                 url=f"https://twitch.tv/evict",
             ),
-            shard_ids=shard_ids,
-            shard_count=shard_count,
         )
-        self.cluster_id = cluster_id
-        self.backend = Backend(self, port)
         self.uptime = datetime.now(timezone.utc)
-        self.Configuration = Configuration
-        self.minio = MinIO(self)
 
     def get_message(
         self, message_id: int
@@ -420,11 +403,8 @@ class Vesta(AutoShardedBot):
         return await super().setup_hook()
 
     async def get_context(
-        self, message: Message, *, cls=Context
+    self, message: Message, *, cls=Context
     ) -> Context:
-        """
-        Custom get_context method that adds the config attribute to the context.
-        """
         context = await super().get_context(
             message, cls=cls
         )
@@ -435,10 +415,8 @@ class Vesta(AutoShardedBot):
         else:
             context.config = None
 
-        context.settings = await Settings.fetch(
-            self, context.guild
-        )
         return context
+
 
     async def on_command_error(
         self, context: Context, exception: Exception

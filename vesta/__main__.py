@@ -4,8 +4,12 @@ import psutil
 import asyncio
 import argparse
 
+from cashews import cache
 from contextlib import suppress
 from os import getenv, environ
+
+from vesta.framework import Vesta
+from vesta.shared.config import Configuration
 
 logging.basicConfig(
     level=logging.INFO,
@@ -33,13 +37,9 @@ environ["JISHAKU_RETAIN"] = "True"
 
 
 async def main():
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--port", type=int, required=True)
-    args = parser.parse_args()
 
     bot = Vesta(
         Configuration(),
-        port=args.port,
     )
 
     async with bot:

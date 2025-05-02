@@ -32,19 +32,6 @@ from wand.image import Image
 from datetime import timedelta
 from humanize import precisedelta
 
-from .payloads import (
-    UserPayload,
-    GuildPayload,
-    MemberPayload,
-    ThreadPayload,
-    TextChannelPayload,
-    ForumChannelPayload,
-    StageChannelPayload,
-    VoiceChannelPayload,
-    PrivateChannelPayload,
-    CategoryChannelPayload,
-)
-
 from discord import (
     ButtonStyle,
     Color,
@@ -55,7 +42,7 @@ from discord import (
     Message,
     PartialEmoji,
     PartialMessage,
-    Role,
+    Role
 )
 from discord.ext import commands
 from discord.ui import (
