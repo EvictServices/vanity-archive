@@ -20,7 +20,7 @@ from vesta.framework.tools.formatter import vowel, codeblock
 from vesta.framework.script import Script
 
 
-class Fun(Cog):
+class Vanity(Cog):
     def __init__(self, bot: Vesta):
         self.bot = bot
 
