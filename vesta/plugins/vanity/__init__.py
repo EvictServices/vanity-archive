@@ -11,7 +11,7 @@ from discord import (
     TextChannel,
     Embed
 )
-from discord.ext.commands import Cog, check, group, has_permissions
+from discord.ext.commands import Cog, hybrid_group, has_permissions
 from discord.utils import find
 
 from vesta.framework import Context, Vesta
@@ -119,7 +119,7 @@ class Vanity(Cog):
                             guild.id,
                         )
     
-    @group(
+    @hybrid_group(
         aliases=["vr"],
         invoke_without_command=True,
     )
@@ -134,10 +134,24 @@ class Vanity(Cog):
         name="channel",
         aliases=["logs"],
         invoke_without_command=True,
-        example="#vanity",
     )
     @has_permissions(manage_roles=True)
     async def vanity_channel(
+        self,
+        ctx: Context,
+    ) -> Message:
+        """
+        Set the channel to send award logs.
+        """
+        return await ctx.send_help(ctx.command)
+    
+    @vanity_channel.command(
+        name="add",
+        aliases=["logs"],
+        invoke_without_command=True,
+    )
+    @has_permissions(manage_roles=True)
+    async def vanity_channel_add(
         self,
         ctx: Context,
         *,
@@ -331,6 +345,41 @@ class Vanity(Cog):
         )
         return await ctx.embed(
             message="No longer awarding members for advertising your server",
+            message_type="approved"
+        )
+
+    @vanity.command(name="role", example="@advertiser")
+    @has_permissions(manage_roles=True)
+    async def vanity_role(
+        self,
+        ctx: Context,
+        *,
+        role: Annotated[
+            Role,
+            StrictRole(check_dangerous=True),
+        ],
+    ) -> Message:
+        """
+        Set the role to award members.
+        """
+        if not ctx.guild.vanity_url_code:
+            return await ctx.embed(
+                message="Your server must be **level 3** boosted to use this feature!",
+                message_type="warned"
+            )
+
+        await self.bot.pool.execute(
+            """
+            INSERT INTO vanity (guild_id, role_id)
+            VALUES ($1, $2)
+            ON CONFLICT (guild_id)
+            DO UPDATE SET role_id = EXCLUDED.role_id
+            """,
+            ctx.guild.id,
+            role.id,
+        )
+        return await ctx.embed(
+            message=f"Now granting {role.mention} to advertisers",
             message_type="approved"
         )
                     

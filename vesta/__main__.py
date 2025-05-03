@@ -27,7 +27,7 @@ logger.info(
     f"Starting Vesta process with PID: {os.getpid()} [Parent: {process.ppid()}]"
 )
 
-cache.setup(getenv("REDIS_URL", "redis://localhost:6379/2"))
+cache.setup(getenv("REDIS_URL", "redis://localhost:6379/10"))
 
 environ["JISHAKU_NO_UNDERSCORE"] = "True"
 environ["JISHAKU_NO_DM_TRACEBACK"] = "True"

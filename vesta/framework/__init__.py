@@ -2,8 +2,6 @@ import logging
 import glob
 import os
 import importlib
-import json
-from io import BytesIO
 
 from datetime import datetime, timezone
 from typing import List, Optional
@@ -59,8 +57,8 @@ class Vesta(AutoShardedBot):
         Configuration: Configuration,
     ):
         super().__init__(
-            command_prefix=self.get_prefix,
-            help_command=MinimalHelpCommand(),
+            command_prefix="..",
+            help_command=None,
             case_insensitive=True,
             strip_after_prefix=True,
             owner_ids=Authentication.owner_ids,
@@ -86,111 +84,6 @@ class Vesta(AutoShardedBot):
         Fetch a message from the cache.
         """
         return self._connection._get_message(message_id)
-
-    async def get_guild_prefix(self, guild_id: int) -> str:
-        cache_key = f"prefix:guild:{guild_id}"
-
-        if cached := await self.redis.get(cache_key):
-            return cached
-
-        if res := await self.pool.fetchrow(
-            """
-            SELECT prefix FROM prefix 
-            WHERE guild_id = $1
-            """,
-            guild_id,
-        ):
-            prefix = (
-                res["prefix"]
-                or Configuration().defaults.prefix
-            )
-            if prefix:
-                await self.redis.set(
-                    cache_key, prefix, ex=3600
-                )
-            return prefix
-
-        return Configuration().defaults.prefix
-
-    async def get_user_prefix(
-        self, user_id: int
-    ) -> Optional[str]:
-        cache_key = f"prefix:user:{user_id}"
-
-        if cached := await self.redis.get(cache_key):
-            return cached
-
-        if res := await self.pool.fetchrow(
-            'SELECT prefix FROM "user".settings WHERE user_id = $1',
-            user_id,
-        ):
-            prefix = res["prefix"]
-            if prefix:
-                await self.redis.set(
-                    cache_key, prefix, ex=3600
-                )
-            return prefix
-
-        return None
-
-    async def get_prefix(
-        self, message: Message
-    ) -> List[str]:
-        if not message.guild:
-            return [self.Configuration.defaults.prefix]
-
-        prefixes = []
-
-        guild_prefix = await self.get_guild_prefix(
-            message.guild.id
-        )
-
-        if guild_prefix:
-            prefixes.append(guild_prefix)
-        if not prefixes:
-            prefixes.append(
-                self.Configuration.defaults.prefix
-            )
-
-        return [str(prefix) for prefix in prefixes]
-
-    async def update_guild_prefix(
-        self, guild_id: int, prefix: str
-    ) -> None:
-        await self.pool.execute(
-            """
-            INSERT INTO prefix (guild_id, prefix)
-            VALUES ($1, $2)
-            ON CONFLICT (guild_id) 
-            DO UPDATE SET prefix = $2
-            """,
-            guild_id,
-            prefix,
-        )
-        if prefix:
-            await self.redis.set(
-                f"prefix:guild:{guild_id}", prefix, ex=3600
-            )
-        else:
-            await self.redis.delete(
-                f"prefix:guild:{guild_id}"
-            )
-
-    async def on_ready(
-        self,
-    ):
-        logger.info(
-            f"Logged in as {self.user} (ID: {self.user.id})"
-        )
-        if self.shard_id:
-            shard_guilds = sum(
-                1
-                for guild in self.guilds
-                if guild.shard_id == self.shard_id
-            )
-            logger.info(
-                f"Shard: {self.shard_id + 1}/{self.shard_count} with {shard_guilds} guild(s)"
-            )
 
     async def on_shard_ready(self, shard_id: int) -> None:
         """
@@ -372,6 +265,13 @@ class Vesta(AutoShardedBot):
         context = await super().get_context(
             message, cls=cls
         )
+
+        if context.guild is not None:
+            context.config = await Configuration.from_guild(
+                context.guild.id, self
+            )
+        else:
+            context.config = None
 
         return context
 

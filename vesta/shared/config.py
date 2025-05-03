@@ -537,7 +537,7 @@ class Authentication:
     minio: ClassVar[MinIO] = MinIO()
     token: ClassVar[str] = getenv("TOKEN", "")
     redis: ClassVar[Redis] = Redis.from_url(
-        getenv("REDIS_URL", "redis://localhost:6379/5")
+        getenv("REDIS_URL", "redis://localhost:6379/10")
     )
     proxy: ClassVar[Proxy] = Proxy.from_url(
         getenv("PROXY_URL", "http://127.1:40000")
@@ -592,3 +592,25 @@ class Configuration:
         self.colors = colors or Colors()
         self.emojis = emojis or Emojis()
         self.defaults = defaults or Defaults()
+
+    @classmethod
+    @cache(ttl="3m", key="configuration:guild:{guild_id}")
+    async def from_guild(
+        cls, guild_id: int, bot: "Vesta"
+    ) -> Self:
+        config: Dict[str, Any] = loads(
+            await bot.pool.fetchval(
+                """
+                SELECT config 
+                FROM guild.settings 
+                WHERE guild_id = $1
+                """,
+                guild_id,
+            )
+            or '{"defaults": {}, "emojis": {}, "colors": {}}'
+        )
+        return cls(
+            colors=Colors(**config["colors"]),
+            emojis=Emojis(**config["emojis"]),
+            defaults=Defaults(**config["defaults"]),
+        )

@@ -30,7 +30,7 @@ from os import getenv
 log = getLogger("vesta/redis")
 
 
-REDIS_URL = getenv("REDIS_URL", "redis://localhost:6379/2")
+REDIS_URL = getenv("REDIS_URL", "redis://localhost:6379/10")
 
 INCREMENT_SCRIPT = b"""
     local current
