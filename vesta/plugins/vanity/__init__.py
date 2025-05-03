@@ -29,13 +29,95 @@ class Vanity(Cog):
         """
         Return the member's custom status.
         """
-
         return str(
             find(
                 lambda activity: isinstance(activity, CustomActivity),
                 member.activities,
             )
         ).lower()
+    
+    @Cog.listener("on_presence_update")
+    async def vanity_listener(self, before: Member, member: Member):
+        """
+        Award the member if they have the vanity URL in their status.
+        If the member has the role without the vanity URL in their status,
+        the role will be automatically removed.
+        """
+        guild = member.guild
+        if not (vanity := guild.vanity_url_code):
+            return
+
+        record = await self.bot.pool.fetchrow(
+            """
+            SELECT * FROM vanity
+            WHERE guild_id = $1
+            """,
+            guild.id,
+        )
+        if not record:
+            return
+
+        role = guild.get_role(record["role_id"])
+        if not role or not role.is_assignable():
+            return
+
+        before_status = self.get_status(before)
+        status = self.get_status(member)
+        if before_status == status:
+            return
+
+        with suppress(HTTPException):
+            if vanity not in status and role in member.roles:
+                await member.remove_roles(
+                    role,
+                    reason="Vanity no longer in status",
+                )
+
+            elif vanity in status and role not in member.roles:
+                await member.add_roles(
+                    role,
+                    reason="Vanity added to status",
+                )
+
+                if (
+                    before.status != Status.offline
+                    and before.status == member.status
+                    and (
+                        channel := cast(
+                            TextChannel, guild.get_channel(record["channel_id"])
+                        )
+                    )
+                    and not await self.bot.redis.ratelimited(
+                         f"vanity:{guild.id}:{member.id}",
+                         limit=1,
+                         timespan=1800,
+                     )
+                ):
+                  
+                    template = record["template"]
+                    default_template = (
+                        "{title: vanity set}"
+                        "{description: thank you {user.mention}}"
+                        "{footer: put /{vanity} in your status for the role.}"
+                    )
+                    
+                    script = Script(
+                        (template or default_template).replace("{vanity}", vanity),
+                        [guild, member, channel],
+                    )
+
+                    try:
+                        await script.send(channel)
+                    
+                    except HTTPException as e:
+                        return await self.bot.pool.execute(
+                            """
+                            UPDATE vanity
+                            SET template = NULL
+                            WHERE guild_id = $1
+                            """,
+                            guild.id,
+                        )
     
     @group(
         aliases=["vr"],
@@ -251,89 +333,6 @@ class Vanity(Cog):
             message="No longer awarding members for advertising your server",
             message_type="approved"
         )
-    
-    @Cog.listener("on_presence_update")
-    async def vanity_listener(self, before: Member, member: Member):
-        """
-        Award the member if they have the vanity URL in their status.
-        If the member has the role without the vanity URL in their status,
-        the role will be automatically removed.
-        """
-        guild = member.guild
-        if not (vanity := guild.vanity_url_code):
-            return
-
-        record = await self.bot.pool.fetchrow(
-            """
-            SELECT * FROM vanity
-            WHERE guild_id = $1
-            """,
-            guild.id,
-        )
-        if not record:
-            return
-
-        role = guild.get_role(record["role_id"])
-        if not role or not role.is_assignable():
-            return
-
-        before_status = self.get_status(before)
-        status = self.get_status(member)
-        if before_status == status:
-            return
-
-        with suppress(HTTPException):
-            if vanity not in status and role in member.roles:
-                await member.remove_roles(
-                    role,
-                    reason="Vanity no longer in status",
-                )
-
-            elif vanity in status and role not in member.roles:
-                await member.add_roles(
-                    role,
-                    reason="Vanity added to status",
-                )
-
-                if (
-                    before.status != Status.offline
-                    and before.status == member.status
-                    and (
-                        channel := cast(
-                            TextChannel, guild.get_channel(record["channel_id"])
-                        )
-                    )
-                    and not await self.bot.redis.ratelimited(
-                         f"vanity:{guild.id}:{member.id}",
-                         limit=1,
-                         timespan=1800,
-                     )
-                ):
-                  
-                    template = record["template"]
-                    default_template = (
-                        "{title: vanity set}"
-                        "{description: thank you {user.mention}}"
-                        "{footer: put /{vanity} in your status for the role.}"
-                    )
-                    
-                    script = Script(
-                        (template or default_template).replace("{vanity}", vanity),
-                        [guild, member, channel],
-                    )
-
-                    try:
-                        await script.send(channel)
-                    
-                    except HTTPException as e:
-                        return await self.bot.pool.execute(
-                            """
-                            UPDATE vanity
-                            SET template = NULL
-                            WHERE guild_id = $1
-                            """,
-                            guild.id,
-                        )
                     
 async def setup(bot: "Vesta") -> None:
     await bot.add_cog(Vanity(bot))

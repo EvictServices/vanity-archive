@@ -23,6 +23,7 @@ from discord import (
 from discord.ext.commands import (
     AutoShardedBot,
     ExtensionError,
+    MinimalHelpCommand
 )
 from discord.ext.tasks import loop
 
@@ -59,7 +60,7 @@ class Vesta(AutoShardedBot):
     ):
         super().__init__(
             command_prefix=self.get_prefix,
-            help_command=None,
+            help_command=MinimalHelpCommand(),
             case_insensitive=True,
             strip_after_prefix=True,
             owner_ids=Authentication.owner_ids,
@@ -94,7 +95,7 @@ class Vesta(AutoShardedBot):
 
         if res := await self.pool.fetchrow(
             """
-            SELECT prefix FROM settings 
+            SELECT prefix FROM prefix 
             WHERE guild_id = $1
             """,
             guild_id,
@@ -143,14 +144,9 @@ class Vesta(AutoShardedBot):
         guild_prefix = await self.get_guild_prefix(
             message.guild.id
         )
-        user_prefix = await self.get_user_prefix(
-            message.author.id
-        )
 
         if guild_prefix:
             prefixes.append(guild_prefix)
-        if user_prefix:
-            prefixes.append(user_prefix)
         if not prefixes:
             prefixes.append(
                 self.Configuration.defaults.prefix
@@ -163,7 +159,7 @@ class Vesta(AutoShardedBot):
     ) -> None:
         await self.pool.execute(
             """
-            INSERT INTO settings (guild_id, prefix)
+            INSERT INTO prefix (guild_id, prefix)
             VALUES ($1, $2)
             ON CONFLICT (guild_id) 
             DO UPDATE SET prefix = $2
@@ -180,40 +176,12 @@ class Vesta(AutoShardedBot):
                 f"prefix:guild:{guild_id}"
             )
 
-    async def update_user_prefix(
-        self, user_id: int, prefix: Optional[str] = None
-    ) -> None:
-        if prefix is None:
-            await self.pool.execute(
-                'UPDATE "user".settings SET prefix = NULL WHERE user_id = $1',
-                user_id,
-            )
-            await self.redis.delete(
-                f"prefix:user:{user_id}"
-            )
-        else:
-            await self.pool.execute(
-                """
-                INSERT INTO "user".settings (user_id, prefix)
-                VALUES ($1, $2)
-                ON CONFLICT (user_id) 
-                DO UPDATE SET prefix = $2
-                """,
-                user_id,
-                prefix,
-            )
-            await self.redis.set(
-                f"prefix:user:{user_id}", prefix, ex=3600
-            )
-
     async def on_ready(
         self,
     ):
         logger.info(
             f"Logged in as {self.user} (ID: {self.user.id})"
         )
-        await self.upload_commands_task.start()
-        await self.upload_stats_task.start()
         if self.shard_id:
             shard_guilds = sum(
                 1
@@ -395,7 +363,7 @@ class Vesta(AutoShardedBot):
 
         await self._load_extensions()
         logger.info("Loaded packages")
-        
+
         return await super().setup_hook()
 
     async def get_context(
@@ -404,12 +372,6 @@ class Vesta(AutoShardedBot):
         context = await super().get_context(
             message, cls=cls
         )
-        if context.guild is not None:
-            context.config = await Configuration.from_guild(
-                context.guild.id, self
-            )
-        else:
-            context.config = None
 
         return context
 
@@ -431,8 +393,6 @@ class Vesta(AutoShardedBot):
         await self.session.close()
         await self.database.close()
         await self.redis.close()
-        await self.upload_commands_task.stop()
-        await self.upload_stats_task.stop()
 
         await super().close()
 
@@ -497,82 +457,6 @@ class Vesta(AutoShardedBot):
                 return
 
             await self.invoke(ctx)
-
-    @loop(minutes=30)  # this is gpt generated shit , concept is to upload commands to a s3 bucket every 30 minutes
-    async def upload_commands_task(self):
-        """
-        Upload commands to a S3 bucket every 30 minutes
-        """
-        if not self.is_ready():
-            return
-            
-        try:
-            logger.info("Starting commands data upload to S3")
-            commands_data = []
-            
-            for command in self.commands:
-                # Skip commands that might cause issues
-                if command.hidden:
-                    continue
-                    
-                # Ensure all data is serializable
-                aliases = [str(alias) for alias in command.aliases] if hasattr(command, "aliases") else []
-                
-                # Create a simpler, guaranteed serializable structure
-                cmd_data = {
-                    "name": str(command.name),
-                    "description": str(command.description or command.help or ""),
-                    "aliases": aliases,
-                    "brief": str(command.brief or ""),
-                    "usage": str(command.usage or ""),
-                    "cog_name": str(command.cog.qualified_name) if command.cog else None,
-                }
-                
-                # Only add subcommands if they exist
-                if hasattr(command, "commands") and command.commands:
-                    subcommands = []
-                    for subcmd in command.commands:
-                        subcmd_data = {
-                            "name": str(subcmd.name),
-                            "description": str(subcmd.description or subcmd.help or ""),
-                        }
-                        subcommands.append(subcmd_data)
-                    cmd_data["subcommands"] = subcommands
-                
-                commands_data.append(cmd_data)
-            
-            # Verify serializable before continuing
-            try:
-                commands_json = json.dumps(commands_data, indent=2, ensure_ascii=True)
-                logger.info(f"JSON serialization successful: {len(commands_data)} commands")
-            except Exception as json_error:
-                logger.error(f"JSON serialization failed: {json_error}")
-                return
-                
-            buffer = BytesIO(commands_json.encode("utf-8"))
-            
-            # Check if system bucket exists before upload
-            if not await self.minio.check_bucket_exists("system"):
-                logger.info("Creating system bucket")
-                await self.minio.create_bucket("system")
-            
-            await self.minio.upload(
-                path="commands.json",
-                buffer=buffer,
-                bucket_name="system"
-            )
-            
-            logger.info(f"Successfully uploaded commands data: {len(commands_data)} commands")
-            
-        except Exception as e:
-            logger.error(f"Failed to upload commands data: {e}", exc_info=True)
-
-    @loop(minutes=5)
-    async def upload_stats_task(self):
-        """
-        Upload stats to a S3 bucket every 5 minutes
-        """
-        pass
 
 
 __all__ = ("Vesta", "Context", "Paginator")
