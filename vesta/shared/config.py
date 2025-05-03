@@ -29,7 +29,7 @@ if TYPE_CHECKING:
 
 
 class Defaults(BaseModel):
-    prefix: str = ";"
+    prefix: str = ","
     help_menu: Literal["Evict", "Basic", "Dropdown"] = (
         "Evict"
     )
