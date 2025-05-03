@@ -395,11 +395,7 @@ class Vesta(AutoShardedBot):
 
         await self._load_extensions()
         logger.info("Loaded packages")
-        self.backend.start_task()
-        logger.info("Started backend task")
-
-        await self.minio.connect()
-        logger.info("Connected to MinIO")
+        
         return await super().setup_hook()
 
     async def get_context(
@@ -435,8 +431,6 @@ class Vesta(AutoShardedBot):
         await self.session.close()
         await self.database.close()
         await self.redis.close()
-        await self.backend.stop()
-        await self.minio.close()
         await self.upload_commands_task.stop()
         await self.upload_stats_task.stop()
 

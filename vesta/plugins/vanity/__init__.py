@@ -334,3 +334,6 @@ class Vanity(Cog):
                             """,
                             guild.id,
                         )
+                    
+async def setup(bot: "Vesta") -> None:
+    await bot.add_cog(Vanity(bot))
