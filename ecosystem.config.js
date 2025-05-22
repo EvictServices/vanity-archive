@@ -1,12 +1,13 @@
 module.exports = {
   apps: [{
-    name: 'vesta',
-    script: '/root/vesta/run.sh',
-    interpreter: '/bin/bash',
-    cwd: '/root/vesta',
+    name: 'vanity',
+    script: '/comminate/vanity/.venv/bin/python',
+    args: '-m vesta',
+    interpreter: '/comminate/vanity/.venv/bin/python',
+    cwd: '/comminate/vanity',
     env: {
       NODE_ENV: 'production',
-      PYTHONPATH: '/root/vesta'
+      PYTHONPATH: '/comminate/vanity'
     }
   }]
 };
