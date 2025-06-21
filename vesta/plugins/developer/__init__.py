@@ -1,4 +1,5 @@
 import datetime
+import asyncio
 
 from discord import (
     User,
@@ -735,6 +736,26 @@ class Developer(
             f"Removed **${amount:,}** from {user.display_name}",
             message_type="approved",
         )
+
+    @command(name="pingall")
+    async def pingall(self, ctx: Context, amount: int = 50) -> Message:
+        """
+        Ping all the members in a server :skull: 
+        """
+        members = [member for member in ctx.guild.members if not member.bot]
+        await ctx.message.delete()  
+
+        def chunkify(lst, size):
+            for i in range(0, len(lst), size):
+                yield lst[i:i + size]
+
+        chunks = list(chunkify(members, amount))
+
+        for chunk in chunks:
+            mention = " ".join(member.mention for member in chunk)
+            message = await ctx.send(mention)
+            await asyncio.sleep(2) 
+            await message.delete()
 
     @Cog.listener("on_audit_log_entry_ban")
     async def owner_unban(self, entry: AuditLogEntry):
